@@ -25,6 +25,7 @@ enum APIError: Error {
 struct AppState: Equatable {
   var toastStatus: ToastStatus = .hiding
   var name: String = ""
+  var token: String?
 }
 
 enum ToastStatus: Equatable {
@@ -82,13 +83,20 @@ let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction,
     return .none
 
   case .logout:
-//    state.session = nil
+    state.token = nil
+    return environment.logout()
+        .mapError { $0 as Error }
+        .flatMap { Effect<AppAction, Error>.none }
+        .eraseToEffect()
 
   case .handleUnauthorized:
-
-
-  default: //fixme
-    return .none
+    return [
+        AppAction.logout,
+        AppAction.showToast("Session expired")
+        ]
+        .publisher
+        .mapError { $0 as Error }
+        .eraseToEffect()
   }
 }
 
@@ -100,8 +108,7 @@ extension Reducer {
       reducer(&state, action, environment)
         .catch { error -> Effect<AppAction, Never> in
           if case APIError.unauthorized = error {
-
-            return Empty().eraseToEffect()
+            return Just(AppAction.handleUnauthorized).eraseToEffect()
           }
 
           return Just(AppAction.showToast(error.localizedDescription)).eraseToEffect()
