@@ -301,6 +301,17 @@ struct RootView: View {
               )
             )
           )
+
+          NavigationLink(
+            "Global toast UI",
+            destination: EditProfileView(
+              store: Store(
+                initialState: AppState(),
+                reducer: Reducer<AppState, AppAction, AppEnvironment>.errorHandling(appReducer),
+                environment: AppEnvironment()
+              )
+            )
+          )
         }
       }
       .navigationBarTitle("Case Studies")
