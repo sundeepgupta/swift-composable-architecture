@@ -57,6 +57,15 @@ enum AppAction {
   case handleUnauthorized
   case showLoading
   case hideLoading
+
+  var requiresLoader: Bool {
+    switch self {
+    case .saveName:
+      return true
+    default:
+      return false
+    }
+  }
 }
 
 struct AppEnvironment {
@@ -89,17 +98,13 @@ let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction,
 //        .eraseToEffect()
 
   case .saveName(let name):
-    print("saveName")
-    let showLoaderEffect = Effect<AppAction, Error>(value: .showLoading)
     let didSaveNameEffect = environment.saveName(name)
       .map { AppAction.didSaveName(name) }
       .eraseToEffect()
-    let hideLoaderEffect = Effect<AppAction, Error>(value: .hideLoading)
 
-    return Effect.concatenate(showLoaderEffect, didSaveNameEffect, hideLoaderEffect)
+    return didSaveNameEffect
 
   case .didSaveName(let name):
-    print("didSaveName")
     state.name = name
     return .none
 
@@ -121,12 +126,10 @@ let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction,
 
   case .showLoading:
     state.isLoading = true
-    print("showLoading")
     return .none
 
   case .hideLoading:
     state.isLoading = false
-    print("hideLoading")
     return .none
 
     }
@@ -136,40 +139,26 @@ extension Reducer {
   static func errorHandling(
     _ reducer: @escaping (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction, Error>
   ) -> Reducer<AppState, AppAction, AppEnvironment> {
-    Reducer<AppState, AppAction, AppEnvironment>.combine(
-      Reducer<AppState, AppAction, AppEnvironment> { state, action, environment in
-        reducer(&state, action, environment)
-          .catch { error -> Effect<AppAction, Never> in
-            if case APIError.unauthorized = error {
-              return Just(AppAction.handleUnauthorized)
-                .flatMap { Effect.concatenate(Effect(value: $0), Effect(value: AppAction.hideLoading) ) }
-                .eraseToEffect()
-            }
-
-            return Just(AppAction.showToast(error.localizedDescription))
-              .flatMap { Effect.concatenate(Effect(value: $0), Effect(value: AppAction.hideLoading) ) }
-              .eraseToEffect()
+    Reducer<AppState, AppAction, AppEnvironment> { state, action, environment in
+      let effect = reducer(&state, action, environment)
+        .catch { error -> Effect<AppAction, Never> in
+          if case APIError.unauthorized = error {
+            return Effect(value: AppAction.handleUnauthorized)
           }
-          //        .append(AppAction.hideLoading)
+
+          return Effect(value: AppAction.showToast(error.localizedDescription))
+        }
+        .eraseToEffect()
+
+      if action.requiresLoader {
+        return effect
+          .prepend(.showLoading)
+          .append(.hideLoading)
           .eraseToEffect()
       }
-//      ,
-//      .subscriptions({ (state, environment) -> [AnyHashable : Effect<AppAction, Never>] in
-//
-//      })
-    )
-//    Reducer<AppState, AppAction, AppEnvironment> { state, action, environment in
-//      reducer(&state, action, environment)
-//        .catch { error -> Effect<AppAction, Never> in
-//          if case APIError.unauthorized = error {
-//            return Just(AppAction.handleUnauthorized).eraseToEffect()
-//          }
-//
-//          return Just(AppAction.showToast(error.localizedDescription)).eraseToEffect()
-//        }
-////        .append(AppAction.hideLoading)
-//        .eraseToEffect()
-//    }
+
+      return effect
+    }
   }
 }
 
