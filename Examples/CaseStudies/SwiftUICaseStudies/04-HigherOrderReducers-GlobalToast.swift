@@ -141,11 +141,15 @@ extension Reducer {
         reducer(&state, action, environment)
           .catch { error -> Effect<AppAction, Never> in
             if case APIError.unauthorized = error {
-              return Just(AppAction.handleUnauthorized).eraseToEffect()
+              return Just(AppAction.handleUnauthorized)
+                .flatMap { Effect.concatenate(Effect(value: $0), Effect(value: AppAction.hideLoading) ) }
+                .eraseToEffect()
             }
 
-            return Just(AppAction.showToast(error.localizedDescription)).eraseToEffect()
-        }
+            return Just(AppAction.showToast(error.localizedDescription))
+              .flatMap { Effect.concatenate(Effect(value: $0), Effect(value: AppAction.hideLoading) ) }
+              .eraseToEffect()
+          }
           //        .append(AppAction.hideLoading)
           .eraseToEffect()
       }
