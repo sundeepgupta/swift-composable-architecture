@@ -62,6 +62,7 @@ enum AppAction {
 struct AppEnvironment {
   var mainQueue: AnySchedulerOf<DispatchQueue> = DispatchQueue.main.eraseToAnyScheduler()
   var saveName: (String) -> AnyPublisher<Void, Error> = { name in
+//    Result<Void, Error>.success(()).publisher.delay(for: 2.0, scheduler: DispatchQueue.main).eraseToAnyPublisher()
     Fail(error: AppError.api).delay(for: 2.0, scheduler: DispatchQueue.main).eraseToAnyPublisher()
   }
   var logout: () -> AnyPublisher<Void, Never> = { Just(()).eraseToAnyPublisher() }
@@ -88,15 +89,17 @@ let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction,
 //        .eraseToEffect()
 
   case .saveName(let name):
-    let showLoaderEffect = Just(AppAction.showLoading)
-        .mapError { $0 as Error }
+    print("saveName")
+    let showLoaderEffect = Effect<AppAction, Error>(value: .showLoading)
     let didSaveNameEffect = environment.saveName(name)
-    .map { AppAction.didSaveName(name) }
+      .map { AppAction.didSaveName(name) }
+      .eraseToEffect()
+    let hideLoaderEffect = Effect<AppAction, Error>(value: .hideLoading)
 
-    return Publishers.Merge(showLoaderEffect, didSaveNameEffect)
-        .eraseToEffect()
+    return Effect.concatenate(showLoaderEffect, didSaveNameEffect, hideLoaderEffect)
 
   case .didSaveName(let name):
+    print("didSaveName")
     state.name = name
     return .none
 
@@ -118,10 +121,12 @@ let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction,
 
   case .showLoading:
     state.isLoading = true
+    print("showLoading")
     return .none
 
   case .hideLoading:
     state.isLoading = false
+    print("hideLoading")
     return .none
 
     }
@@ -131,18 +136,36 @@ extension Reducer {
   static func errorHandling(
     _ reducer: @escaping (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction, Error>
   ) -> Reducer<AppState, AppAction, AppEnvironment> {
-    Reducer<AppState, AppAction, AppEnvironment> { state, action, environment in
-      reducer(&state, action, environment)
-        .catch { error -> Effect<AppAction, Never> in
-          if case APIError.unauthorized = error {
-            return Just(AppAction.handleUnauthorized).eraseToEffect()
-          }
+    Reducer<AppState, AppAction, AppEnvironment>.combine(
+      Reducer<AppState, AppAction, AppEnvironment> { state, action, environment in
+        reducer(&state, action, environment)
+          .catch { error -> Effect<AppAction, Never> in
+            if case APIError.unauthorized = error {
+              return Just(AppAction.handleUnauthorized).eraseToEffect()
+            }
 
-          return Just(AppAction.showToast(error.localizedDescription)).eraseToEffect()
+            return Just(AppAction.showToast(error.localizedDescription)).eraseToEffect()
         }
-        .append(AppAction.hideLoading)
-        .eraseToEffect()
-    }
+          //        .append(AppAction.hideLoading)
+          .eraseToEffect()
+      }
+//      ,
+//      .subscriptions({ (state, environment) -> [AnyHashable : Effect<AppAction, Never>] in
+//
+//      })
+    )
+//    Reducer<AppState, AppAction, AppEnvironment> { state, action, environment in
+//      reducer(&state, action, environment)
+//        .catch { error -> Effect<AppAction, Never> in
+//          if case APIError.unauthorized = error {
+//            return Just(AppAction.handleUnauthorized).eraseToEffect()
+//          }
+//
+//          return Just(AppAction.showToast(error.localizedDescription)).eraseToEffect()
+//        }
+////        .append(AppAction.hideLoading)
+//        .eraseToEffect()
+//    }
   }
 }
 
@@ -203,6 +226,9 @@ struct EditProfileView: View {
         VStack {
           TextField("Name", text: self.$name)
           Button("Save") { viewStore.send(.saveName(self.name)) }
+          if viewStore.isLoading {
+            Image(systemName: "tortoise")
+          }
         }
         ToastViewContainer(store: self.store)
       }
