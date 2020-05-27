@@ -26,6 +26,7 @@ struct AppState: Equatable {
   var toastStatus: ToastStatus = .hiding
   var name: String = ""
   var token: String?
+  var isLoading: Bool = false
 }
 
 enum ToastStatus: Equatable {
@@ -49,18 +50,22 @@ enum ToastStatus: Equatable {
 enum AppAction {
   case showToast(String)
   case hideToast
+//  case startSaveName
   case saveName(String)
   case didSaveName(String)
   case logout
   case handleUnauthorized
+  case showLoading
+  case hideLoading
 }
 
 struct AppEnvironment {
   var mainQueue: AnySchedulerOf<DispatchQueue> = DispatchQueue.main.eraseToAnyScheduler()
   var saveName: (String) -> AnyPublisher<Void, Error> = { name in
-    Fail(error: AppError.api).eraseToAnyPublisher()
+    Fail(error: AppError.api).delay(for: 2.0, scheduler: DispatchQueue.main).eraseToAnyPublisher()
   }
   var logout: () -> AnyPublisher<Void, Never> = { Just(()).eraseToAnyPublisher() }
+  var delay: () -> AnyPublisher<Void, Never> = { Just(()).delay(for: 2.0, scheduler: DispatchQueue.main).eraseToAnyPublisher() }
 }
 
 let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction, Error> = { state, action, environment in
@@ -73,10 +78,23 @@ let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction,
     state.toastStatus = .hiding
     return .none
 
+//  case .startSaveName(let name):
+//    return [
+//        AppAction.showLoading,
+//        AppAction.saveName(name)
+//        ]
+//        .publisher
+//        .mapError { $0 as Error }
+//        .eraseToEffect()
+
   case .saveName(let name):
-    return environment.saveName(name)
-      .map { AppAction.didSaveName(name) }
-      .eraseToEffect()
+    let showLoaderEffect = Just(AppAction.showLoading)
+        .mapError { $0 as Error }
+    let didSaveNameEffect = environment.saveName(name)
+    .map { AppAction.didSaveName(name) }
+
+    return Publishers.Merge(showLoaderEffect, didSaveNameEffect)
+        .eraseToEffect()
 
   case .didSaveName(let name):
     state.name = name
@@ -97,7 +115,16 @@ let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction,
         .publisher
         .mapError { $0 as Error }
         .eraseToEffect()
-  }
+
+  case .showLoading:
+    state.isLoading = true
+    return .none
+
+  case .hideLoading:
+    state.isLoading = false
+    return .none
+
+    }
 }
 
 extension Reducer {
@@ -113,6 +140,7 @@ extension Reducer {
 
           return Just(AppAction.showToast(error.localizedDescription)).eraseToEffect()
         }
+        .append(AppAction.hideLoading)
         .eraseToEffect()
     }
   }
