@@ -97,11 +97,13 @@ enum AppError: Error, LocalizedError {
 }
 
 struct AppState: Equatable {
+  var profileState = ProfileState()
   var toastState = ToastState()
   var data: [String] = []
 }
 
 enum AppAction {
+  case profileAction(ProfileAction)
   case toastAction(ToastAction)
   case loadData
   case didLoadData([String])
@@ -111,7 +113,7 @@ struct AppEnvironment {
   var loadData: () -> Effect<[String], Error>
 }
 
-let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction, Error> = { state, action, environment in
+let appReducer = FailableReducer<AppState, AppAction, AppEnvironment> { state, action, environment in
   switch action {
   case .toastAction:
     return .none
@@ -121,6 +123,9 @@ let appReducer: (inout AppState, AppAction, AppEnvironment) -> Effect<AppAction,
 
   case .didLoadData(let data):
     state.data = data
+    return .none
+
+  case .profileAction(_):
     return .none
   }
 }
@@ -136,6 +141,14 @@ struct AppView: View {
             Button("Load Data") { viewStore.send(.loadData) }
             ForEach(viewStore.state.data, id: \.self) { Text($0) }
           }
+          Section(header: Text(template: readMe, .caption)) {
+            ProfileView(
+              store: self.store.scope(
+                state: { $0.profileState },
+                action: { AppAction.profileAction($0) }
+              )
+            )
+          }
         }
         ToastView(
           store: self.store.scope(
@@ -149,8 +162,82 @@ struct AppView: View {
   }
 }
 
+struct ProfileView: View {
+  let store: Store<ProfileState, ProfileAction>
+  var body: some View {
+    WithViewStore(self.store) { viewStore in
+      Button("Load Profile") { viewStore.send(.loadProfile) }
+    }
+  }
+}
+
+
+struct FailableReducer<State, Action, Environment> {
+  let reducer: (inout State, Action, Environment) -> Effect<Action, Error>
+
+  public static func combine(_ reducers: [FailableReducer]) -> FailableReducer {
+    Self { value, action, environment in
+      .merge(reducers.map { $0.reducer(&value, action, environment) })
+    }
+  }
+
+  func pullback<GlobalState, GlobalAction, GlobalEnvironment>(
+    state toLocalState: WritableKeyPath<GlobalState, State>,
+    action toLocalAction: CasePath<GlobalAction, Action>,
+    environment toLocalEnvironment: @escaping (GlobalEnvironment) -> Environment
+  ) -> FailableReducer<GlobalState, GlobalAction, GlobalEnvironment> {
+    .init { globalState, globalAction, globalEnvironment in
+      guard let localAction = toLocalAction.extract(from: globalAction) else { return .none }
+      return self.reducer(
+        &globalState[keyPath: toLocalState],
+        localAction,
+        toLocalEnvironment(globalEnvironment)
+      )
+        .map(toLocalAction.embed)
+    }
+  }
+}
+
+struct ProfileState: Equatable {}
+
+enum ProfileAction {
+  case loadProfile
+  case didLoadProfile(String)
+}
+
+struct ProfileEnvironment {
+  func loadProfile() -> AnyPublisher<String, Error> {
+    Fail(error: AppError.api).eraseToAnyPublisher()
+  }
+}
+
+let profileReducer = FailableReducer<ProfileState, ProfileAction, ProfileEnvironment> { state, result, environment in
+  switch result {
+  case .loadProfile:
+    return environment
+      .loadProfile()
+      .map { .didLoadProfile($0) }
+      .eraseToEffect()
+
+  case .didLoadProfile(_):
+    break
+  }
+  return .none
+}
+
+let appAndProfileReducer = FailableReducer<AppState, AppAction, AppEnvironment>.combine([
+  appReducer,
+  profileReducer.pullback(
+    state: \.profileState,
+    action: /AppAction.profileAction,
+    environment: { _ in ProfileEnvironment() }
+  )
+])
+
 let combinedFailureToastReducer = Reducer<AppState, AppAction, AppEnvironment>.combine(
-  .errorHandling(appReducer),
+  .errorHandling(
+    appAndProfileReducer.reducer
+  ),
   toastReducer.pullback(
     state: \AppState.toastState,
     action: /AppAction.toastAction,
