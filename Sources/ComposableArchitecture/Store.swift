@@ -11,7 +11,7 @@ public final class Store<State, Action> {
   var effectCancellables: [UUID: AnyCancellable] = [:]
   private var isSending = false
   private var parentCancellable: AnyCancellable?
-  private let reducer: (inout State, Action) -> Effect<Action, Never>
+  private let reducer: (inout State, Action) -> Effect<Action, Error>
   private var synchronousActionsToSend: [Action] = []
   private var bufferedActions: [Action] = []
 
@@ -159,9 +159,14 @@ public final class Store<State, Action> {
 
       var isProcessingEffects = true
       let effectCancellable = effect.sink(
-        receiveCompletion: { [weak self] _ in
+        receiveCompletion: { [weak self] completion in
           didComplete = true
           self?.effectCancellables[uuid] = nil
+
+          switch completion {
+          case .finished: break
+          case .failure: print("Warning: Unhandled failure")
+          }
         },
         receiveValue: { [weak self] action in
           if isProcessingEffects {
@@ -192,7 +197,7 @@ public final class Store<State, Action> {
 
   private init(
     initialState: State,
-    reducer: @escaping (inout State, Action) -> Effect<Action, Never>
+    reducer: @escaping (inout State, Action) -> Effect<Action, Error>
   ) {
     self.reducer = reducer
     self.state = CurrentValueSubject(initialState)
