@@ -93,12 +93,12 @@ final class ComposableArchitectureTests: XCTestCase {
     let reducer = Reducer<Int, Action, Environment> { state, action, environment in
       switch action {
       case .end:
-        return environment.stopEffect.fireAndForget()
+        return environment.stopEffect.fireAndForget().setFailureType(to: Error.self).eraseToEffect()
       case .incr:
         state += 1
         return .none
       case .start:
-        return environment.startEffect.map { Action.incr }
+        return environment.startEffect.map { Action.incr }.setFailureType(to: Error.self).eraseToEffect()
       }
     }
 
@@ -146,6 +146,7 @@ final class ComposableArchitectureTests: XCTestCase {
         return environment.fetch(state)
           .receive(on: environment.mainQueue)
           .map(Action.response)
+          .setFailureType(to: Error.self)
           .eraseToEffect()
           .cancellable(id: CancelId())
 
