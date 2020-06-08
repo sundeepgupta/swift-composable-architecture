@@ -28,7 +28,7 @@ final class StoreTests: XCTestCase {
     let reducer = Reducer<Void, Action, Void> { _, action, _ in
       switch action {
       case .start:
-        return effect.map { .end }
+        return effect.map { .end }.setFailureType(to: Error.self).eraseToEffect()
       case .end:
         return .none
       }
