@@ -171,6 +171,7 @@
       line: UInt = #line
     ) {
       var receivedActions: [Action] = []
+      var receivedError: Error?
 
       var cancellables: [AnyCancellable] = []
 
@@ -179,8 +180,14 @@
         var isComplete = false
         var cancellable: AnyCancellable?
         cancellable = effect.sink(
-          receiveCompletion: { _ in
+          receiveCompletion: { completion in
             isComplete = true
+
+            switch completion {
+            case .finished: break
+            case .failure(let error): receivedError = error
+            }
+
             guard let cancellable = cancellable else { return }
             cancellables.removeAll(where: { $0 == cancellable })
           },
@@ -238,6 +245,33 @@
             )
           }
           runReducer(action: receivedAction)
+          update(&expectedState)
+
+        case let .failure(expectedError, update):
+          guard let receivedError = receivedError else {
+            _XCTFail(
+              """
+              Expected to receive an error, but received none.
+              """,
+              file: step.file,
+              line: step.line
+            )
+            break
+          }
+          
+          let receivedErrorType = type(of: receivedError)
+          let expectedErrorType = type(of: expectedError)
+          guard receivedErrorType == expectedErrorType else {
+            _XCTFail(
+              """
+              Expected error's type, \(expectedErrorType), does not match the received error's type, \(receivedErrorType)."
+              """,
+              file: step.file,
+              line: step.line
+            )
+            break
+          }
+
           update(&expectedState)
 
         case let .environment(work):
@@ -390,6 +424,23 @@
         Step(.receive(action, update), file: file, line: line)
       }
 
+      /// A step that describes an error received by an effect and asserts against how the store's
+      /// state is expected to change.
+      ///
+      /// - Parameters:
+      ///   - error: The error the test store should receive by evaluating an effect.
+      ///   - update: A function that describes how the test store's state is expected to change.
+      /// - Returns: A step that describes an action received by an effect and asserts against how
+      ///   the store's state is expected to change.
+      public static func fail(
+        _ error: Error,
+        file: StaticString = #file,
+        line: UInt = #line,
+        _ update: @escaping (inout LocalState) -> Void = { _ in }
+      ) -> Step {
+        Step(.failure(error, update), file: file, line: line)
+      }
+
       /// A step that updates a test store's environment.
       ///
       /// - Parameter update: A function that updates the test store's environment for subsequent
@@ -418,6 +469,7 @@
       fileprivate enum StepType {
         case send(LocalAction, (inout LocalState) -> Void)
         case receive(Action, (inout LocalState) -> Void)
+        case failure(Error, (inout LocalState) -> Void)
         case environment((inout Environment) -> Void)
       }
     }
