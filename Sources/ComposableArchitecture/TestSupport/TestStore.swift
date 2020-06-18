@@ -356,7 +356,7 @@
           expectedStateShouldMatch(actualState: toLocalState(state))
           snapshotState = state
 
-        case let .failure(expectedError, update):
+        case let .fail(assertOn, update):
           guard let receivedError = receivedError else {
             _XCTFail(
               """
@@ -367,20 +367,8 @@
             )
             break
           }
-          
-          let receivedErrorType = type(of: receivedError)
-          let expectedErrorType = type(of: expectedError)
-          guard receivedErrorType == expectedErrorType else {
-            _XCTFail(
-              """
-              Expected error's type, \(expectedErrorType), does not match the received error's type, \(receivedErrorType)."
-              """,
-              file: step.file,
-              line: step.line
-            )
-            break
-          }
 
+          assertOn(receivedError)
           update(&expectedState)
 
         case let .environment(work):
@@ -552,17 +540,17 @@
       /// state is expected to change.
       ///
       /// - Parameters:
-      ///   - error: The error the test store should receive by evaluating an effect.
+      ///   - assertOn: A closure which can inspect and assert on the error received by the store.
       ///   - update: A function that describes how the test store's state is expected to change.
       /// - Returns: A step that describes an action received by an effect and asserts against how
       ///   the store's state is expected to change.
       public static func fail(
-        _ error: Error,
         file: StaticString = #file,
         line: UInt = #line,
+        assertOn: @escaping (Error) -> Void = { _ in },
         _ update: @escaping (inout LocalState) -> Void = { _ in }
       ) -> Step {
-        Step(.failure(error, update), file: file, line: line)
+        Step(.fail(assertOn, update), file: file, line: line)
       }
 
       /// A step that updates a test store's environment.
@@ -593,7 +581,7 @@
       fileprivate enum StepType {
         case send(LocalAction, (inout LocalState) throws -> Void)
         case receive(Action, (inout LocalState) throws -> Void)
-        case failure(Error, (inout LocalState) -> Void)
+        case failure((Error) -> Void, (inout LocalState) -> Void)
         case environment((inout Environment) throws -> Void)
         case `do`(() throws -> Void)
       }
