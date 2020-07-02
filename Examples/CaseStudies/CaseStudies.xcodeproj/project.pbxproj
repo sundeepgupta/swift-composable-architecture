@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		36DBEC47247BFFFD00AF9C80 /* 04-HigherOrderReducers-FailureToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36DBEC46247BFFFD00AF9C80 /* 04-HigherOrderReducers-FailureToast.swift */; };
+		C1BD426C24AE116A00B3197F /* DynamicNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1BD426B24AE116A00B3197F /* DynamicNavigation.swift */; };
 		CA0C51FB245389CC00A04EAB /* 04-HigherOrderReducers-ResuableOfflineDownloadsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0C51FA245389CC00A04EAB /* 04-HigherOrderReducers-ResuableOfflineDownloadsTests.swift */; };
 		CA25E5D224463AD700DA666A /* 01-GettingStarted-Bindings-Basics.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA25E5D124463AD700DA666A /* 01-GettingStarted-Bindings-Basics.swift */; };
 		CA27C0B7245780CE00CB1E59 /* 03-Effects-SystemEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA27C0B6245780CE00CB1E59 /* 03-Effects-SystemEnvironment.swift */; };
@@ -124,6 +125,7 @@
 
 /* Begin PBXFileReference section */
 		36DBEC46247BFFFD00AF9C80 /* 04-HigherOrderReducers-FailureToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "04-HigherOrderReducers-FailureToast.swift"; sourceTree = "<group>"; };
+		C1BD426B24AE116A00B3197F /* DynamicNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicNavigation.swift; sourceTree = "<group>"; };
 		CA0C51FA245389CC00A04EAB /* 04-HigherOrderReducers-ResuableOfflineDownloadsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "04-HigherOrderReducers-ResuableOfflineDownloadsTests.swift"; sourceTree = "<group>"; };
 		CA25E5D124463AD700DA666A /* 01-GettingStarted-Bindings-Basics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "01-GettingStarted-Bindings-Basics.swift"; sourceTree = "<group>"; };
 		CA27C0B6245780CE00CB1E59 /* 03-Effects-SystemEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "03-Effects-SystemEnvironment.swift"; sourceTree = "<group>"; };
@@ -319,6 +321,7 @@
 				DC89C45224465451006900B9 /* 03-Navigation-Lists-NavigateAndLoad.swift */,
 				DC89C448244618D5006900B9 /* 03-Navigation-LoadThenNavigate.swift */,
 				DC89C44C244621A5006900B9 /* 03-Navigation-NavigateAndLoad.swift */,
+				C1BD426B24AE116A00B3197F /* DynamicNavigation.swift */,
 				DC072321244663B1003A8B65 /* 03-Navigation-Sheet-LoadThenPresent.swift */,
 				DCC68EAA244666AF0037F998 /* 03-Navigation-Sheet-PresentAndLoad.swift */,
 				DCAC2A4E2452352E0094DEF5 /* 04-HigherOrderReducers-ElmLikeSubscriptions.swift */,
@@ -570,6 +573,7 @@
 				DCC68EE32447C8540037F998 /* 04-HigherOrderReducers-ReusableFavoriting.swift in Sources */,
 				DCC68EDF2447BC810037F998 /* TemplateText.swift in Sources */,
 				DCAC2A4F2452352E0094DEF5 /* 04-HigherOrderReducers-ElmLikeSubscriptions.swift in Sources */,
+				C1BD426C24AE116A00B3197F /* DynamicNavigation.swift in Sources */,
 				CA6AC2672451135C00C71CB3 /* DownloadClient.swift in Sources */,
 				DC89C44724461431006900B9 /* ActivityIndicator.swift in Sources */,
 				CAA9ADC624465C810003A984 /* 02-Effects-Cancellation.swift in Sources */,

@@ -205,6 +205,11 @@ struct RootView: View {
             )
           )
 
+            NavigationLink(
+                "Lists: Dynamic navigation",
+                destination: DNView()
+            )
+
           NavigationLink(
             "Sheets: Present and load data",
             destination: EagerSheetView(
