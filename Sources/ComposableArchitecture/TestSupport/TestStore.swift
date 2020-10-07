@@ -228,7 +228,7 @@
       let store = Store(
         initialState: self.state,
         reducer: Reducer<State, TestAction, Void> { state, action, _ in
-          let effects: Effect<Action, Never>
+          let effects: Effect<Action, Error>
           switch action {
           case let .send(localAction):
             effects = self.reducer.run(&state, self.fromLocalAction(localAction), self.environment)
