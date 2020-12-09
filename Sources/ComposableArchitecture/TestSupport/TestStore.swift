@@ -356,7 +356,7 @@
           expectedStateShouldMatch(actualState: toLocalState(state))
           snapshotState = state
 
-        case let .fail(assertOn, update):
+        case let .failure(assertOn, update):
           guard let receivedError = receivedError else {
             _XCTFail(
               """
@@ -550,7 +550,7 @@
         assertOn: @escaping (Error) -> Void = { _ in },
         _ update: @escaping (inout LocalState) -> Void = { _ in }
       ) -> Step {
-        Step(.fail(assertOn, update), file: file, line: line)
+        Step(.failure(assertOn, update), file: file, line: line)
       }
 
       /// A step that updates a test store's environment.
