@@ -17,7 +17,7 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(store.effectCancellables.count, 0)
   }
 
-  func testCancellableIsRemovedWhenEffectCompletes() {
+  func testCancellableIsRemovedWhenEffectFinishes() {
     let scheduler = DispatchQueue.testScheduler
     let effect = Effect<Void, Never>(value: ())
       .delay(for: 1, scheduler: scheduler)
@@ -28,7 +28,38 @@ final class StoreTests: XCTestCase {
     let reducer = Reducer<Void, Action, Void> { _, action, _ in
       switch action {
       case .start:
-        return effect.map { .end }
+        return effect.map { .end }.setFailureType(to: Error.self).eraseToEffect()
+      case .end:
+        return .none
+      }
+    }
+    let store = Store(initialState: (), reducer: reducer, environment: ())
+
+    XCTAssertEqual(store.effectCancellables.count, 0)
+
+    store.send(.start)
+
+    XCTAssertEqual(store.effectCancellables.count, 1)
+
+    scheduler.advance(by: 2)
+
+    XCTAssertEqual(store.effectCancellables.count, 0)
+  }
+
+  func testCancellableIsRemovedWhenEffectFails() {
+    struct Error: Swift.Error {}
+
+    let scheduler = DispatchQueue.testScheduler
+    let effect = Effect<Void, Error>(error: Error())
+      .delay(for: 1, scheduler: scheduler)
+      .eraseToEffect()
+
+    enum Action { case start, end }
+
+    let reducer = Reducer<Void, Action, Void> { _, action, _ in
+      switch action {
+      case .start:
+        return effect.map { .end }.mapError { $0 as Swift.Error }.eraseToEffect()
       case .end:
         return .none
       }

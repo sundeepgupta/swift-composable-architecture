@@ -221,13 +221,14 @@
       line: UInt = #line
     ) {
       var receivedActions: [(action: Action, state: State)] = []
+      var receivedError: Error?
       var longLivingEffects: [String: Set<UUID>] = [:]
       var snapshotState = self.state
 
       let store = Store(
         initialState: self.state,
         reducer: Reducer<State, TestAction, Void> { state, action, _ in
-          let effects: Effect<Action, Never>
+          let effects: Effect<Action, Error>
           switch action {
           case let .send(localAction):
             effects = self.reducer.run(&state, self.fromLocalAction(localAction), self.environment)
@@ -244,7 +245,14 @@
             effects
             .handleEvents(
               receiveSubscription: { _ in longLivingEffects[key, default: []].insert(id) },
-              receiveCompletion: { _ in longLivingEffects[key]?.remove(id) },
+              receiveCompletion: { completion in
+                longLivingEffects[key]?.remove(id)
+
+                switch completion {
+                  case .finished: break
+                  case .failure(let error): receivedError = error
+                }
+              },
               receiveCancel: { longLivingEffects[key]?.remove(id) }
             )
             .map(TestAction.receive)
@@ -347,6 +355,21 @@
           }
           expectedStateShouldMatch(actualState: toLocalState(state))
           snapshotState = state
+
+        case let .failure(assertOn, update):
+          guard let receivedError = receivedError else {
+            _XCTFail(
+              """
+              Expected to receive an error, but received none.
+              """,
+              file: step.file,
+              line: step.line
+            )
+            break
+          }
+
+          assertOn(receivedError)
+          update(&expectedState)
 
         case let .environment(work):
           if !receivedActions.isEmpty {
@@ -513,6 +536,23 @@
         Step(.receive(action, update), file: file, line: line)
       }
 
+      /// A step that describes an error received by an effect and asserts against how the store's
+      /// state is expected to change.
+      ///
+      /// - Parameters:
+      ///   - assertOn: A closure which can inspect and assert on the error received by the store.
+      ///   - update: A function that describes how the test store's state is expected to change.
+      /// - Returns: A step that describes an action received by an effect and asserts against how
+      ///   the store's state is expected to change.
+      public static func fail(
+        file: StaticString = #file,
+        line: UInt = #line,
+        assertOn: @escaping (Error) -> Void = { _ in },
+        _ update: @escaping (inout LocalState) -> Void = { _ in }
+      ) -> Step {
+        Step(.failure(assertOn, update), file: file, line: line)
+      }
+
       /// A step that updates a test store's environment.
       ///
       /// - Parameter update: A function that updates the test store's environment for subsequent
@@ -541,6 +581,7 @@
       fileprivate enum StepType {
         case send(LocalAction, (inout LocalState) throws -> Void)
         case receive(Action, (inout LocalState) throws -> Void)
+        case failure((Error) -> Void, (inout LocalState) -> Void)
         case environment((inout Environment) throws -> Void)
         case `do`(() throws -> Void)
       }
