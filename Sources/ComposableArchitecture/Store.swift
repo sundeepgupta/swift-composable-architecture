@@ -165,7 +165,9 @@ public final class Store<State, Action> {
 
           switch completion {
           case .finished: break
-          case .failure(let error): print("⚠️ ComposableArchitecture: Received unhandled error: \(error.localizedDescription)")
+          case .failure(let error):
+            print(
+              "⚠️ ComposableArchitecture: Received unhandled error: \(error.localizedDescription)")
           }
         },
         receiveValue: { [weak self] action in

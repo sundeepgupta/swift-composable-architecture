@@ -99,7 +99,8 @@ final class ComposableArchitectureTests: XCTestCase {
         state += 1
         return .none
       case .start:
-        return environment.startEffect.map { Action.incr }.setFailureType(to: Error.self).eraseToEffect()
+        return environment.startEffect.map { Action.incr }.setFailureType(to: Error.self)
+          .eraseToEffect()
       }
     }
 

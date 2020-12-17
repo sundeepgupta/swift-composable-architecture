@@ -249,8 +249,8 @@
                 longLivingEffects[key]?.remove(id)
 
                 switch completion {
-                  case .finished: break
-                  case .failure(let error): receivedError = error
+                case .finished: break
+                case .failure(let error): receivedError = error
                 }
               },
               receiveCancel: { longLivingEffects[key]?.remove(id) }
