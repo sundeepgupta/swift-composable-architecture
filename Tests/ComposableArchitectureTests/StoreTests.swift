@@ -131,7 +131,7 @@ final class StoreTests: XCTestCase {
     var outputs: [String] = []
 
     parentStore
-      .scope(state: { $0.map { "\($0)" }.removeDuplicates() })
+      .publisherScope(state: { $0.map { "\($0)" }.removeDuplicates() })
       .sink { childStore in
         childStore.state
           .sink { outputs.append($0) }
@@ -276,7 +276,7 @@ final class StoreTests: XCTestCase {
     var outputs: [Int] = []
 
     parentStore
-      .scope { $0.removeDuplicates() }
+      .publisherScope { $0.removeDuplicates() }
       .sink { outputs.append($0.state.value) }
       .store(in: &self.cancellables)
 
@@ -353,7 +353,7 @@ final class StoreTests: XCTestCase {
           state? += 1
           return .none
         } else {
-          return Just(true).receive(on: DispatchQueue.main).eraseToEffect()
+            return Just(true).receive(on: DispatchQueue.main).setFailureType(to: Error.self).eraseToEffect()
         }
       },
       environment: ()
@@ -396,7 +396,7 @@ final class StoreTests: XCTestCase {
           return .none
 
         case .`init`:
-          return subject.map { .doIncrement }.eraseToEffect()
+            return subject.map { .doIncrement }.setFailureType(to: Error.self).eraseToEffect()
 
         case .doIncrement:
           state += 1
