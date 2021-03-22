@@ -25,19 +25,14 @@ enum EffectsCancellationAction: Equatable {
   case cancelButtonTapped
   case stepperChanged(Int)
   case triviaButtonTapped
-  case triviaResponse(Result<String, TriviaApiError>)
+  case triviaResponse(Result<String, NumbersApiError>)
 }
 
 struct TriviaApiError: Error, Equatable {}
 
 struct EffectsCancellationEnvironment {
   var mainQueue: AnySchedulerOf<DispatchQueue>
-  var trivia: (Int) -> Effect<String, TriviaApiError>
-
-  static let live = EffectsCancellationEnvironment(
-    mainQueue: DispatchQueue.main.eraseToAnyScheduler(),
-    trivia: liveTrivia(for:)
-  )
+  var numberFact: (Int) -> Effect<String, NumbersApiError>
 }
 
 // MARK: - Business logic
@@ -63,7 +58,7 @@ let effectsCancellationReducer = Reducer<
     state.currentTrivia = nil
     state.isTriviaRequestInFlight = true
 
-    return environment.trivia(state.count)
+    return environment.numberFact(state.count)
       .receive(on: environment.mainQueue)
       .catchToEffect()
       .map(EffectsCancellationAction.triviaResponse)
@@ -133,26 +128,10 @@ struct EffectsCancellation_Previews: PreviewProvider {
           reducer: effectsCancellationReducer,
           environment: EffectsCancellationEnvironment(
             mainQueue: DispatchQueue.main.eraseToAnyScheduler(),
-            trivia: liveTrivia(for:)
+            numberFact: liveNumberFact(for:)
           )
         )
       )
     }
   }
-}
-
-// This is the "live" trivia dependency that reaches into the outside world to fetch trivia.
-// Typically this live implementation of the dependency would live in its own module so that the
-// main feature doesn't need to compile it.
-private func liveTrivia(for n: Int) -> Effect<String, TriviaApiError> {
-  URLSession.shared.dataTaskPublisher(for: URL(string: "http://numbersapi.com/\(n)/trivia")!)
-    .map { data, _ in String.init(decoding: data, as: UTF8.self) }
-    .catch { _ in
-      // Sometimes numbersapi.com can be flakey, so if it ever fails we will just
-      // default to a mock response.
-      Just("\(n) is a good number Brent")
-        .delay(for: 1, scheduler: DispatchQueue.main)
-    }
-    .mapError { _ in TriviaApiError() }
-    .eraseToEffect()
 }

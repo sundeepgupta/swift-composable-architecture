@@ -38,13 +38,16 @@ let timersReducer = Reducer<TimersState, TimersAction, TimersEnvironment> {
   case .toggleTimerButtonTapped:
     state.isTimerActive.toggle()
     return state.isTimerActive
-      ? Effect.timer(id: TimerId(), every: 1, tolerance: .zero, on: environment.mainQueue)
-        .map { _ in TimersAction.timerTicked }
+      ? Effect.timer(
+        id: TimerId(),
+        every: 1,
+        tolerance: .zero,
+        on: environment.mainQueue.animation(.interpolatingSpring(stiffness: 3000, damping: 40))
+      )
+      .map { _ in TimersAction.timerTicked }
       : Effect.cancel(id: TimerId())
   }
 }
-.signpost()
-.debug()
 
 // MARK: - Timer feature view
 
@@ -96,7 +99,6 @@ struct TimersView: View {
           }
           .stroke(Color.black, lineWidth: 3)
           .rotationEffect(.degrees(Double(self.viewStore.secondsElapsed) * 360 / 60))
-          .animation(Animation.interpolatingSpring(stiffness: 3000, damping: 40))
         }
       }
       .frame(width: 280, height: 280)

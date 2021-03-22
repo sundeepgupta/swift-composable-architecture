@@ -48,6 +48,10 @@ public final class ViewStore<State, Action>: ObservableObject {
 
   private var viewCancellable: AnyCancellable?
 
+  // N.B. `ViewStore` does not use a `@Published` property, so `objectWillChange`
+  // won't be synthesized automatically. To work around issues on iOS 13 we explicitly declare it.
+  public private(set) lazy var objectWillChange = ObservableObjectPublisher()
+
   /// Initializes a view store from a store.
   ///
   /// - Parameters:
@@ -58,9 +62,9 @@ public final class ViewStore<State, Action>: ObservableObject {
     _ store: Store<State, Action>,
     removeDuplicates isDuplicate: @escaping (State, State) -> Bool
   ) {
-    let publisher = store.$state.removeDuplicates(by: isDuplicate)
+    let publisher = store.state.removeDuplicates(by: isDuplicate)
     self.publisher = StorePublisher(publisher)
-    self.state = store.state
+    self.state = store.state.value
     self._send = store.send
     self.viewCancellable = publisher.sink { [weak self] in self?.state = $0 }
   }
@@ -125,10 +129,15 @@ public final class ViewStore<State, Action>: ObservableObject {
     Binding(
       get: { get(self.state) },
       set: { newLocalState, transaction in
-        withAnimation(transaction.disablesAnimations ? nil : transaction.animation) {
+        if transaction.animation != nil {
+          withTransaction(transaction) {
+            self.send(localStateToViewAction(newLocalState))
+          }
+        } else {
           self.send(localStateToViewAction(newLocalState))
         }
-      })
+      }
+    )
   }
 
   /// Derives a binding from the store that prevents direct writes to state and instead sends
@@ -170,7 +179,7 @@ public final class ViewStore<State, Action>: ObservableObject {
   ///
   /// For example, a text field binding can be created like this:
   ///
-  ///     struct State { var name = "" }
+  ///     typealias State = String
   ///     enum Action { case nameChanged(String) }
   ///
   ///     TextField(
@@ -199,14 +208,14 @@ public final class ViewStore<State, Action>: ObservableObject {
   ///
   /// For example, an alert binding can be dealt with like this:
   ///
-  ///     struct State { var alert: String? }
+  ///     typealias State = String
   ///     enum Action { case alertDismissed }
   ///
   ///     .alert(
-  ///       item: self.store.binding(
+  ///       item: viewStore.binding(
   ///         send: .alertDismissed
   ///       )
-  ///     ) { alert in Alert(title: Text(alert.message)) }
+  ///     ) { title in Alert(title: Text(title)) }
   ///
   /// - Parameters:
   ///   - action: The action to send when the binding is written to.

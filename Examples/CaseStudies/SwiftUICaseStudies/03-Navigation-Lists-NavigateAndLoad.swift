@@ -9,7 +9,11 @@ private let readMe = """
   """
 
 struct NavigateAndLoadListState: Equatable {
-  var rows: IdentifiedArrayOf<Row> = []
+  var rows: IdentifiedArrayOf<Row> = [
+    .init(count: 1, id: UUID()),
+    .init(count: 42, id: UUID()),
+    .init(count: 100, id: UUID()),
+  ]
   var selection: Identified<Row.ID, CounterState?>?
 
   struct Row: Equatable, Identifiable {
@@ -28,10 +32,11 @@ struct NavigateAndLoadListEnvironment {
   var mainQueue: AnySchedulerOf<DispatchQueue>
 }
 
-let navigateAndLoadListReducer = counterReducer
-  .optional
+let navigateAndLoadListReducer =
+  counterReducer
+  .optional()
   .pullback(state: \Identified.value, action: .self, environment: { $0 })
-  .optional
+  .optional()
   .pullback(
     state: \NavigateAndLoadListState.selection,
     action: /NavigateAndLoadListAction.counter,

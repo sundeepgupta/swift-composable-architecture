@@ -88,7 +88,7 @@ final class StoreTests: XCTestCase {
     let childStore = parentStore.scope(state: String.init)
 
     var values: [String] = []
-    childStore.$state
+    childStore.state
       .sink(receiveValue: { values.append($0) })
       .store(in: &self.cancellables)
 
@@ -110,7 +110,7 @@ final class StoreTests: XCTestCase {
     let childViewStore = ViewStore(childStore)
 
     var values: [Int] = []
-    parentStore.$state
+    parentStore.state
       .sink(receiveValue: { values.append($0) })
       .store(in: &self.cancellables)
 
@@ -131,9 +131,9 @@ final class StoreTests: XCTestCase {
     var outputs: [String] = []
 
     parentStore
-      .scope(state: { $0.map { "\($0)" }.removeDuplicates() })
+      .publisherScope(state: { $0.map { "\($0)" }.removeDuplicates() })
       .sink { childStore in
-        childStore.$state
+        childStore.state
           .sink { outputs.append($0) }
           .store(in: &self.cancellables)
       }
@@ -263,5 +263,160 @@ final class StoreTests: XCTestCase {
     let store = Store(initialState: 0, reducer: reducer, environment: ())
     store.send(.incr)
     XCTAssertEqual(ViewStore(store).state, 100_000)
+  }
+
+  func testPublisherScope() {
+    let appReducer = Reducer<Int, Bool, Void> { state, action, _ in
+      state += action ? 1 : 0
+      return .none
+    }
+
+    let parentStore = Store(initialState: 0, reducer: appReducer, environment: ())
+
+    var outputs: [Int] = []
+
+    parentStore
+      .publisherScope { $0.removeDuplicates() }
+      .sink { outputs.append($0.state.value) }
+      .store(in: &self.cancellables)
+
+    XCTAssertEqual(outputs, [0])
+
+    parentStore.send(true)
+    XCTAssertEqual(outputs, [0, 1])
+
+    parentStore.send(false)
+    XCTAssertEqual(outputs, [0, 1])
+    parentStore.send(false)
+    XCTAssertEqual(outputs, [0, 1])
+    parentStore.send(false)
+    XCTAssertEqual(outputs, [0, 1])
+    parentStore.send(false)
+    XCTAssertEqual(outputs, [0, 1])
+  }
+
+  func testIfLetAfterScope() {
+    struct AppState {
+      var count: Int?
+    }
+
+    let appReducer = Reducer<AppState, Int?, Void> { state, action, _ in
+      state.count = action
+      return .none
+    }
+
+    let parentStore = Store(initialState: AppState(), reducer: appReducer, environment: ())
+
+    // NB: This test needs to hold a strong reference to the emitted stores
+    var outputs: [Int?] = []
+    var stores: [Any] = []
+
+    parentStore
+      .scope(state: { $0.count })
+      .ifLet(
+        then: { store in
+          stores.append(store)
+          outputs.append(store.state.value)
+        },
+        else: {
+          outputs.append(nil)
+        }
+      )
+      .store(in: &self.cancellables)
+
+    XCTAssertEqual(outputs, [nil])
+
+    parentStore.send(1)
+    XCTAssertEqual(outputs, [nil, 1])
+
+    parentStore.send(nil)
+    XCTAssertEqual(outputs, [nil, 1, nil])
+
+    parentStore.send(1)
+    XCTAssertEqual(outputs, [nil, 1, nil, 1])
+
+    parentStore.send(nil)
+    XCTAssertEqual(outputs, [nil, 1, nil, 1, nil])
+
+    parentStore.send(1)
+    XCTAssertEqual(outputs, [nil, 1, nil, 1, nil, 1])
+
+    parentStore.send(nil)
+    XCTAssertEqual(outputs, [nil, 1, nil, 1, nil, 1, nil])
+  }
+
+  func testIfLetTwo() {
+    let parentStore = Store(
+      initialState: 0,
+      reducer: Reducer<Int?, Bool, Void> { state, action, _ in
+        if action {
+          state? += 1
+          return .none
+        } else {
+            return Just(true).receive(on: DispatchQueue.main).setFailureType(to: Error.self).eraseToEffect()
+        }
+      },
+      environment: ()
+    )
+
+    parentStore.ifLet { childStore in
+      let vs = ViewStore(childStore)
+
+      vs
+        .publisher
+        .sink { _ in }
+        .store(in: &self.cancellables)
+
+      vs.send(false)
+      _ = XCTWaiter.wait(for: [.init()], timeout: 0.1)
+      vs.send(false)
+      _ = XCTWaiter.wait(for: [.init()], timeout: 0.1)
+      vs.send(false)
+      _ = XCTWaiter.wait(for: [.init()], timeout: 0.1)
+      XCTAssertEqual(vs.state, 3)
+    }
+    .store(in: &self.cancellables)
+  }
+
+  func testActionQueuing() {
+    let subject = PassthroughSubject<Void, Never>()
+
+    enum Action: Equatable {
+      case incrementTapped
+      case `init`
+      case doIncrement
+    }
+
+    let store = TestStore(
+      initialState: 0,
+      reducer: Reducer<Int, Action, Void> { state, action, _ in
+        switch action {
+        case .incrementTapped:
+          subject.send()
+          return .none
+
+        case .`init`:
+            return subject.map { .doIncrement }.setFailureType(to: Error.self).eraseToEffect()
+
+        case .doIncrement:
+          state += 1
+          return .none
+        }
+      },
+      environment: ()
+    )
+
+    store.assert(
+      .send(.`init`),
+      .send(.incrementTapped),
+      .receive(.doIncrement) {
+        $0 = 1
+      },
+      .send(.incrementTapped),
+      .receive(.doIncrement) {
+        $0 = 2
+      },
+      .do { subject.send(completion: .finished) }
+    )
   }
 }

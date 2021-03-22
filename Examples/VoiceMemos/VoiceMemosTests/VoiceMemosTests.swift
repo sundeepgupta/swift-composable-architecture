@@ -97,7 +97,7 @@ class VoiceMemosTests: XCTestCase {
       .send(.recordButtonTapped),
       .do { self.scheduler.advance() },
       .receive(.recordPermissionBlockCalled(false)) {
-        $0.alert = .init(title: "Permission is required to record voice memos.")
+        $0.alert = .init(title: .init("Permission is required to record voice memos."))
         $0.audioRecorderPermission = .denied
       },
       .send(.alertDismissed) {
@@ -142,7 +142,7 @@ class VoiceMemosTests: XCTestCase {
       },
       .do { audioRecorderSubject.send(completion: .failure(.couldntActivateAudioSession)) },
       .receive(.audioRecorderClient(.failure(.couldntActivateAudioSession))) {
-        $0.alert = .init(title: "Voice memo recording failed.")
+        $0.alert = .init(title: .init("Voice memo recording failed."))
         $0.currentRecording = nil
       }
     )
@@ -178,9 +178,13 @@ class VoiceMemosTests: XCTestCase {
       .send(.voiceMemo(index: 0, action: .playButtonTapped)) {
         $0.voiceMemos[0].mode = VoiceMemo.Mode.playing(progress: 0)
       },
-      .do { self.scheduler.advance(by: 1) },
+      .do { self.scheduler.advance(by: 0.5) },
       .receive(VoiceMemosAction.voiceMemo(index: 0, action: VoiceMemoAction.timerUpdated(0.5))) {
         $0.voiceMemos[0].mode = .playing(progress: 0.5)
+      },
+      .do { self.scheduler.advance(by: 0.5) },
+      .receive(VoiceMemosAction.voiceMemo(index: 0, action: VoiceMemoAction.timerUpdated(1))) {
+        $0.voiceMemos[0].mode = .playing(progress: 1)
       },
       .receive(
         .voiceMemo(
@@ -188,9 +192,6 @@ class VoiceMemosTests: XCTestCase {
           action: .audioPlayerClient(.success(.didFinishPlaying(successfully: true)))
         )
       ) {
-        $0.voiceMemos[0].mode = .notPlaying
-      },
-      .receive(VoiceMemosAction.voiceMemo(index: 0, action: VoiceMemoAction.timerUpdated(1))) {
         $0.voiceMemos[0].mode = .notPlaying
       }
     )
@@ -223,7 +224,7 @@ class VoiceMemosTests: XCTestCase {
         $0.voiceMemos[0].mode = .playing(progress: 0)
       },
       .receive(.voiceMemo(index: 0, action: .audioPlayerClient(.failure(.decodeErrorDidOccur)))) {
-        $0.alert = .init(title: "Voice memo playback failed.")
+        $0.alert = .init(title: .init("Voice memo playback failed."))
         $0.voiceMemos[0].mode = .notPlaying
       }
     )
@@ -262,6 +263,8 @@ class VoiceMemosTests: XCTestCase {
   }
 
   func testDeleteMemo() {
+    var didStopAudioPlayerClient = false
+
     let store = TestStore(
       initialState: VoiceMemosState(
         voiceMemos: [
@@ -276,6 +279,9 @@ class VoiceMemosTests: XCTestCase {
       ),
       reducer: voiceMemosReducer,
       environment: .mock(
+        audioPlayerClient: .mock(
+          stop: { _ in .fireAndForget { didStopAudioPlayerClient = true } }
+        ),
         mainQueue: self.scheduler.eraseToAnyScheduler()
       )
     )
@@ -283,6 +289,7 @@ class VoiceMemosTests: XCTestCase {
     store.assert(
       .send(.voiceMemo(index: 0, action: .delete)) {
         $0.voiceMemos = []
+        XCTAssertEqual(didStopAudioPlayerClient, true)
       }
     )
   }
@@ -303,7 +310,8 @@ class VoiceMemosTests: XCTestCase {
       reducer: voiceMemosReducer,
       environment: .mock(
         audioPlayerClient: .mock(
-          play: { id, url in .future { _ in } }
+          play: { id, url in .future { _ in } },
+          stop: { _ in .fireAndForget {} }
         ),
         mainQueue: self.scheduler.eraseToAnyScheduler()
       )

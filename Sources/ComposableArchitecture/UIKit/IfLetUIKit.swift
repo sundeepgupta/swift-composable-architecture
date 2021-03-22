@@ -43,17 +43,33 @@ extension Store {
     then unwrap: @escaping (Store<Wrapped, Action>) -> Void,
     else: @escaping () -> Void
   ) -> Cancellable where State == Wrapped? {
-    self
-      .scope(
+    let elseCancellable =
+      self
+      .publisherScope(
         state: { state in
           state
             .removeDuplicates(by: { ($0 != nil) == ($1 != nil) })
-            .handleEvents(receiveOutput: { if $0 == nil { `else`() } })
+        }
+      )
+      .sink { store in
+        if store.state.value == nil { `else`() }
+      }
+
+    let unwrapCancellable =
+      self
+      .publisherScope(
+        state: { state in
+          state
+            .removeDuplicates(by: { ($0 != nil) == ($1 != nil) })
             .compactMap { $0 }
-        },
-        action: { $0 }
+        }
       )
       .sink(receiveValue: unwrap)
+
+    return AnyCancellable {
+      elseCancellable.cancel()
+      unwrapCancellable.cancel()
+    }
   }
 
   /// An overload of `ifLet(then:else:)` for the times that you do not want to handle the `else`

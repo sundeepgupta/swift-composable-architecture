@@ -232,9 +232,15 @@ public struct Effect<Output, Failure: Error>: Publisher {
   /// - Parameter work: A closure encapsulating some work to execute in the real world.
   /// - Returns: An effect.
   public static func fireAndForget(_ work: @escaping () -> Void) -> Effect {
-    Deferred { () -> Empty<Output, Failure> in
+    // NB: Ideally we'd return a `Deferred` wrapping an `Empty(completeImmediately: true)`, but
+    //     due to a bug in iOS 13.2 that publisher will never complete. The bug was fixed in
+    //     iOS 13.3, but to remain compatible with iOS 13.2 and higher we need to do a little
+    //     trickery to make sure the deferred publisher completes.
+    Deferred { () -> Publishers.CompactMap<Result<Output?, Failure>.Publisher, Output> in
       work()
-      return Empty(completeImmediately: true)
+      return Just<Output?>(nil)
+        .setFailureType(to: Failure.self)
+        .compactMap { $0 }
     }
     .eraseToEffect()
   }
@@ -274,26 +280,6 @@ extension Effect where Failure == Swift.Error {
   }
 }
 
-extension Effect where Output == Never {
-  /// Upcasts an `Effect<Never, Failure>` to an `Effect<T, Failure>` for any type `T`. This is
-  /// possible to do because an `Effect<Never, Failure>` can never produce any values to feed back
-  /// into the store (hence the name "fire and forget"), and therefore we can act like it's an
-  /// effect that produces values of any type (since it never produces values).
-  ///
-  /// This is useful for times you have an `Effect<Never, Failure>` but need to massage it into
-  /// another type in order to return it from a reducer:
-  ///
-  ///     case .buttonTapped:
-  ///       return analyticsClient.track("Button Tapped")
-  ///         .fireAndForget()
-  ///
-  /// - Returns: An effect.
-  public func fireAndForget<T>() -> Effect<T, Failure> {
-    func absurd<A>(_ never: Never) -> A {}
-    return self.map(absurd)
-  }
-}
-
 extension Publisher {
   /// Turns any publisher into an `Effect`.
   ///
@@ -325,6 +311,31 @@ extension Publisher {
   public func catchToEffect() -> Effect<Result<Output, Failure>, Never> {
     self.map(Result.success)
       .catch { Just(.failure($0)) }
+      .eraseToEffect()
+  }
+
+  /// Turns any publisher into an `Effect` for any output and failure type by ignoring all output
+  /// and any failure.
+  ///
+  /// This is useful for times you want to fire off an effect but don't want to feed any data back
+  /// into the system. It can automatically promote an effect to your reducer's domain.
+  ///
+  ///     case .buttonTapped:
+  ///       return analyticsClient.track("Button Tapped")
+  ///         .fireAndForget()
+  ///
+  /// - Parameters:
+  ///   - outputType: An output type.
+  ///   - failureType: A failure type.
+  /// - Returns: An effect that never produces output or errors.
+  public func fireAndForget<NewOutput, NewFailure>(
+    outputType: NewOutput.Type = NewOutput.self,
+    failureType: NewFailure.Type = NewFailure.self
+  ) -> Effect<NewOutput, NewFailure> {
+    return
+      self
+      .flatMap { _ in Empty() }
+      .catch { _ in Empty() }
       .eraseToEffect()
   }
 }
